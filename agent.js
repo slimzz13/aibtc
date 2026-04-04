@@ -1,7 +1,17 @@
 const { spawn } = require('child_process');
+const http = require('http');
+
+// Render Web Service Health Check
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('AIBTC Agent is running natively!');
+}).listen(PORT, () => {
+    console.log(`Web service listening on port ${PORT} for Render health checks.`);
+});
 
 // Start the aibtc mcp server and bind to it
-const mcp = spawn('npx.cmd', ['@aibtc/mcp-server']);
+const mcp = spawn(/^win/.test(process.platform) ? 'npx.cmd' : 'npx', ['@aibtc/mcp-server']);
 let callId = 1;
 
 function rpcCall(method, params = {}) {
@@ -29,7 +39,7 @@ setTimeout(() => {
     console.log("==> Unlocking Wallet...");
     rpcCall("tools/call", {
         name: "wallet_unlock",
-        arguments: { password: "Akinwande@60" } // Warning: do not leak this repo if this is sensitive!
+        arguments: { password: process.env.WALLET_PASSWORD } // Securely read from Render environment variables
     });
 }, 3000);
 
