@@ -11,7 +11,7 @@ http.createServer((req, res) => {
 });
 
 // Start the aibtc mcp server and bind to it
-const mcp = spawn(/^win/.test(process.platform) ? 'npx.cmd' : 'npx', ['@aibtc/mcp-server']);
+const mcp = spawn(/^win/.test(process.platform) ? 'npx.cmd' : 'npx', ['@aibtc/mcp-server'], { shell: true });
 let callId = 1;
 
 function rpcCall(method, params = {}) {
