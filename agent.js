@@ -14,6 +14,20 @@ http.createServer((req, res) => {
 const mcp = spawn(/^win/.test(process.platform) ? 'npx.cmd' : 'npx', ['@aibtc/mcp-server'], { shell: true });
 let callId = 1;
 
+// Self-Ping Uptime Bot (Keeps Render Free Tier Awake)
+setInterval(() => {
+    const url = process.env.RENDER_EXTERNAL_URL;
+    if (url) {
+        http.get(url, (res) => {
+            console.log(`[Uptime Bot] Self-ping successful: ${res.statusCode}`);
+        }).on('error', (e) => {
+            console.error(`[Uptime Bot] Self-ping failed: ${e.message}`);
+        });
+    } else {
+        console.log("[Uptime Bot] Running locally. Skipping self-ping.");
+    }
+}, 1000 * 60 * 14); // Ping every 14 minutes
+
 function rpcCall(method, params = {}) {
     const payload = JSON.stringify({
         jsonrpc: "2.0",
