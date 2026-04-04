@@ -1,0 +1,10 @@
+{
+  "name": "aibtc-agent-bot",
+  "version": "1.0.0",
+  "description": "Autonomous Agent Bot for the AIBTC network. Automates news generation, arxiv processing, and heartbeats.",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "dependencies": {}
+}
