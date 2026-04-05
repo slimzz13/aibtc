@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const http = require('http');
+const cron = require('node-cron');
 
 // Render Web Service Health Check
 const PORT = process.env.PORT || 3000;
@@ -57,10 +58,29 @@ setTimeout(() => {
     });
 }, 3000);
 
-// Daily schedule loops 
-setInterval(() => {
-    console.log("==> Sending Heartbeat...");
-    // Assuming heartbeat tool or sign message is configured here.
-}, 1000 * 60 * 5); // 5 mins
+// Signal posting schedule — times in UTC (user is PDT = UTC-7):
+// 09:00 PDT = 16:00 UTC  (Morning)
+// 13:00 PDT = 20:00 UTC  (Afternoon)
+// 18:00 PDT = 01:00 UTC  (Evening, next UTC day)
+cron.schedule('0 16,20,1 * * *', () => {
+    const now = new Date().toISOString();
+    console.log(`==> [${now}] Scheduled signal posting triggered...`);
+
+    // Step 1: Re-unlock wallet (in case session expired)
+    rpcCall("tools/call", {
+        name: "wallet_unlock",
+        arguments: { password: process.env.WALLET_PASSWORD }
+    });
+
+    // Step 2: Search arxiv for fresh AIBTC-relevant research
+    setTimeout(() => {
+        console.log("==> Searching for fresh AIBTC/Stacks security research...");
+        rpcCall("tools/call", {
+            name: "arxiv_search",
+            arguments: { categories: "cs.CR,cs.AI", max_results: 1 }
+        });
+    }, 2000);
+
+}, { timezone: "UTC" });
 
 console.log("Agent Loop Initialized. Waiting for MCP Server to start...");
