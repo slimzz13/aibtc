@@ -1,0 +1,9 @@
+services:
+  - type: worker
+    name: aibtc-agent-bot
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: WALLET_PASSWORD
+        sync: false
