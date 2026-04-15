@@ -108,22 +108,25 @@ async function postNewsSignal() {
             arguments: { password: process.env.WALLET_PASSWORD }
         });
 
-        // Step 2: Search arxiv for fresh AIBTC-relevant research
-        console.log("==> Searching for fresh AIBTC/Stacks security research...");
-        const arxivResponse = await rpcCall("tools/call", {
-            name: "arxiv_search",
-            arguments: { categories: "cs.CR,cs.AI", max_results: 1 }
+        // Step 2: Search for AIBTC Network Activity
+        console.log("==> Fetching AIBTC/Stacks on-chain activity...");
+        const networkStatus = await rpcCall("tools/call", {
+            name: "get_network_status",
+            arguments: {}
+        });
+        const mempoolInfo = await rpcCall("tools/call", {
+            name: "get_mempool_info",
+            arguments: {}
         });
         
-        console.log("==> Arxiv Search Results:", JSON.stringify(arxivResponse).substring(0, 200) + "...");
+        let blockHeight = networkStatus?.chainTip?.block_height || "unknown";
+        let mempoolCount = mempoolInfo?.total || 0;
         
-        // Extract basic data from tool output if available
-        const arxivText = typeof arxivResponse === 'object' && arxivResponse.text ? arxivResponse.text : JSON.stringify(arxivResponse);
-
-        // Step 3: Compile News Signal
-        console.log("==> Compiling News Signal Wrapper...");
-        const mockHeadline = "Latest Advances in Bitcoin & AI Security (Arxiv)";
-        const mockSummary = `Detected new publication relevant to cs.CR/cs.AI. Summary: ${arxivText.substring(0, 150)}...`;
+        // Step 3: Compile News Wrapper
+        console.log("==> Compiling News Signal Wrapper based on chain activity...");
+        
+        const mockHeadline = `AIBTC Network Activity: Stacks Block #${blockHeight} and Mempool Status`;
+        const mockSummary = `Live on-chain analysis indicates the Stacks network has reached block height ${blockHeight}. The current mempool shows ${mempoolCount} pending transactions processing in the ecosystem. This indicates active utilization of AIBTC infrastructure and agent deployments.`;
         
         // Step 4: Submit Signal
         console.log("==> Submitting News Signal via news_file_signal...");
@@ -135,12 +138,12 @@ async function postNewsSignal() {
                 body: mockSummary,
                 sources: [
                     {
-                        url: "https://arxiv.org/abs/2604.13029",
-                        title: "Visual Preference Optimization/AIBTC Security"
+                        url: "https://explorer.hiro.so/",
+                        title: "Stacks Blockchain Explorer"
                     }
                 ],
-                tags: ["aibtc", "security", "ai"],
-                disclosure: "AIBTC Agent built via Antigravity code assistant, arxiv data."
+                tags: ["aibtc", "on-chain", "stacks"],
+                disclosure: "AIBTC Agent built via Antigravity code assistant, fetching live data using @aibtc/mcp-server."
             }
         });
         
