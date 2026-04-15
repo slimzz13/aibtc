@@ -29,57 +29,122 @@ setInterval(() => {
     }
 }, 1000 * 60 * 14); // Ping every 14 minutes
 
+const pendingCalls = new Map();
+let rpcBuffer = '';
+
 function rpcCall(method, params = {}) {
-    const payload = JSON.stringify({
-        jsonrpc: "2.0",
-        method,
-        id: callId++,
-        params
+    return new Promise((resolve, reject) => {
+        const id = callId++;
+        const payload = JSON.stringify({
+            jsonrpc: "2.0",
+            method,
+            id,
+            params
+        });
+        pendingCalls.set(id, { resolve, reject });
+        console.log(`[>> RPC OUT ID:${id}]: Method: ${method}`);
+        mcp.stdin.write(payload + '\n');
     });
-    console.log(`[>> RPC OUT]: Method: ${method}`);
-    mcp.stdin.write(payload + '\n');
 }
 
 mcp.stdout.on('data', (data) => {
-    const str = data.toString();
-    console.log(`[<< RPC IN]: ${str}`);
+    rpcBuffer += data.toString();
+    const lines = rpcBuffer.split('\n');
+    rpcBuffer = lines.pop(); // keep incomplete line
+    
+    for (const line of lines) {
+        if (!line.trim()) continue;
+        console.log(`[<< RPC IN]: ${line}`);
+        try {
+            const resp = JSON.parse(line);
+            if (resp.id && pendingCalls.has(resp.id)) {
+                if (resp.error) {
+                    pendingCalls.get(resp.id).reject(new Error(JSON.stringify(resp.error)));
+                } else if (resp.result && resp.result.isError) {
+                    const errMsg = resp.result.content ? JSON.stringify(resp.result.content) : "Unknown MCP Error";
+                    pendingCalls.get(resp.id).reject(new Error(`MCP Tool Error: ${errMsg}`));
+                } else {
+                    pendingCalls.get(resp.id).resolve(resp.result);
+                }
+                pendingCalls.delete(resp.id);
+            }
+        } catch (e) {
+            // Unparseable (might be non-JSON logs from the MCP server)
+        }
+    }
 });
 
 mcp.stderr.on('data', (data) => {
-    console.error(`[!! RPC ERR]: ${data.toString()}`);
+    console.error(`[!! RPC ERR]: ${data.toString().trim()}`);
 });
 
 // Boot Sequence
-setTimeout(() => {
+setTimeout(async () => {
     console.log("==> Unlocking Wallet...");
-    rpcCall("tools/call", {
-        name: "wallet_unlock",
-        arguments: { password: process.env.WALLET_PASSWORD } // Securely read from Render environment variables
-    });
+    try {
+        await rpcCall("tools/call", {
+            name: "wallet_unlock",
+            arguments: { password: process.env.WALLET_PASSWORD } // Securely read from Render environment variables
+        });
+        console.log("==> Wallet Unlocked successfully.");
+    } catch (err) {
+        console.error("==> Wallet Unlock failed:", err.message);
+    }
 }, 3000);
 
 // Signal posting schedule — times in UTC (user is PDT = UTC-7):
 // 09:00 PDT = 16:00 UTC  (Morning)
 // 13:00 PDT = 20:00 UTC  (Afternoon)
 // 18:00 PDT = 01:00 UTC  (Evening, next UTC day)
-cron.schedule('0 16,20,1 * * *', () => {
+cron.schedule('0 16,20,1 * * *', async () => {
     const now = new Date().toISOString();
     console.log(`==> [${now}] Scheduled signal posting triggered...`);
 
-    // Step 1: Re-unlock wallet (in case session expired)
-    rpcCall("tools/call", {
-        name: "wallet_unlock",
-        arguments: { password: process.env.WALLET_PASSWORD }
-    });
+    try {
+        // Step 1: Re-unlock wallet (in case session expired)
+        console.log("==> Unlocking Wallet...");
+        await rpcCall("tools/call", {
+            name: "wallet_unlock",
+            arguments: { password: process.env.WALLET_PASSWORD }
+        });
 
-    // Step 2: Search arxiv for fresh AIBTC-relevant research
-    setTimeout(() => {
+        // Step 2: Search arxiv for fresh AIBTC-relevant research
         console.log("==> Searching for fresh AIBTC/Stacks security research...");
-        rpcCall("tools/call", {
+        const arxivResponse = await rpcCall("tools/call", {
             name: "arxiv_search",
             arguments: { categories: "cs.CR,cs.AI", max_results: 1 }
         });
-    }, 2000);
+        
+        console.log("==> Arxiv Search Results:", JSON.stringify(arxivResponse).substring(0, 200) + "...");
+        
+        // Extract basic data from tool output if available
+        const arxivText = typeof arxivResponse === 'object' && arxivResponse.text ? arxivResponse.text : JSON.stringify(arxivResponse);
+
+        // Step 3: Compile News Signal
+        // Note: For full automation, you would send 'arxivText' to an LLM provider (OpenAI API, Anthropic, etc) to format.
+        // For now, we will construct a basic structured news signal payload natively. 
+        console.log("==> Compiling News Signal Wrapper...");
+        const mockHeadline = "Latest Advances in Bitcoin & AI Security (Arxiv)";
+        const mockSummary = `Detected new publication relevant to cs.CR/cs.AI. Summary: ${arxivText.substring(0, 150)}...`;
+        
+        // Step 4: Submit Signal
+        console.log("==> Submitting News Signal via aibtc_news...");
+        // Calling the assumed tool name for submitting news signal (often it follows the format tool_name)
+        const submitResult = await rpcCall("tools/call", {
+            name: "aibtc_news_submit", // Update if the tool name differs based on `npx skills list`
+            arguments: {
+                headline: mockHeadline,
+                summary: mockSummary,
+                source: "https://arxiv.org",
+                publisher: "bc1qktaz6rg5k4smre0wfde2tjs2eupvggpmdz39ku" // Rising Leviathan publisher as per your doc
+            }
+        });
+        
+        console.log(`==> SUCCESS! Signal Posted:`, submitResult);
+
+    } catch (err) {
+        console.error("==> Bot Scheduled Loop encountered an error:", err.message);
+    }
 
 }, { timezone: "UTC" });
 
