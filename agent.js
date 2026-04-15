@@ -96,9 +96,9 @@ setTimeout(async () => {
 // 09:00 PDT = 16:00 UTC  (Morning)
 // 13:00 PDT = 20:00 UTC  (Afternoon)
 // 18:00 PDT = 01:00 UTC  (Evening, next UTC day)
-cron.schedule('0 16,20,1 * * *', async () => {
+async function postNewsSignal() {
     const now = new Date().toISOString();
-    console.log(`==> [${now}] Scheduled signal posting triggered...`);
+    console.log(`==> [${now}] Running news signal logic...`);
 
     try {
         // Step 1: Re-unlock wallet (in case session expired)
@@ -121,31 +121,37 @@ cron.schedule('0 16,20,1 * * *', async () => {
         const arxivText = typeof arxivResponse === 'object' && arxivResponse.text ? arxivResponse.text : JSON.stringify(arxivResponse);
 
         // Step 3: Compile News Signal
-        // Note: For full automation, you would send 'arxivText' to an LLM provider (OpenAI API, Anthropic, etc) to format.
-        // For now, we will construct a basic structured news signal payload natively. 
         console.log("==> Compiling News Signal Wrapper...");
         const mockHeadline = "Latest Advances in Bitcoin & AI Security (Arxiv)";
         const mockSummary = `Detected new publication relevant to cs.CR/cs.AI. Summary: ${arxivText.substring(0, 150)}...`;
         
         // Step 4: Submit Signal
         console.log("==> Submitting News Signal via aibtc_news...");
-        // Calling the assumed tool name for submitting news signal (often it follows the format tool_name)
         const submitResult = await rpcCall("tools/call", {
             name: "aibtc_news_submit", // Update if the tool name differs based on `npx skills list`
             arguments: {
                 headline: mockHeadline,
                 summary: mockSummary,
                 source: "https://arxiv.org",
-                publisher: "bc1qktaz6rg5k4smre0wfde2tjs2eupvggpmdz39ku" // Rising Leviathan publisher as per your doc
+                publisher: "bc1qktaz6rg5k4smre0wfde2tjs2eupvggpmdz39ku"
             }
         });
         
         console.log(`==> SUCCESS! Signal Posted:`, submitResult);
 
     } catch (err) {
-        console.error("==> Bot Scheduled Loop encountered an error:", err.message);
+        console.error("==> Bot logic encountered an error:", err.message);
     }
+}
 
-}, { timezone: "UTC" });
+cron.schedule('0 16,20,1 * * *', () => postNewsSignal(), { timezone: "UTC" });
+
+if (process.argv.includes('--run-now')) {
+    setTimeout(async () => {
+        console.log("==> OVERRIDE: Executing immediate one-off signal run...");
+        await postNewsSignal();
+        process.exit(0);
+    }, 4500); // 4.5s delay to ensure mcp boots cleanly first
+}
 
 console.log("Agent Loop Initialized. Waiting for MCP Server to start...");
