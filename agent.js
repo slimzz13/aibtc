@@ -110,8 +110,8 @@ async function postNewsSignal() {
 
         // Step 2: Search for AIBTC Network Activity
         console.log("==> Fetching AIBTC/Stacks on-chain activity...");
-        const networkStatus = await rpcCall("tools/call", {
-            name: "get_network_status",
+        const poxInfo = await rpcCall("tools/call", {
+            name: "get_pox_info",
             arguments: {}
         });
         const mempoolInfo = await rpcCall("tools/call", {
@@ -119,14 +119,43 @@ async function postNewsSignal() {
             arguments: {}
         });
         
-        let blockHeight = networkStatus?.chainTip?.block_height || "unknown";
-        let mempoolCount = mempoolInfo?.total || 0;
+        // Parse the raw MCP string outputs into JSON objects
+        let poxObj = {};
+        let mempoolObj = {};
+        try {
+            poxObj = JSON.parse(poxInfo.content[0].text);
+        } catch (e) {
+            console.error("Failed to parse poxInfo:", poxInfo);
+        }
+        try {
+            mempoolObj = JSON.parse(mempoolInfo.content[0].text);
+        } catch (e) {
+            console.error("Failed to parse mempoolInfo:", mempoolInfo);
+        }
         
-        // Step 3: Compile News Wrapper
+        let mempoolCount = mempoolObj?.total || 0;
+        let stackedUsdt = poxObj?.currentCycle?.stacked_ustx || 0;
+        let totalLiquid = poxObj?.totalLiquidSupplyUstx || 1;
+        let blocksUntil = poxObj?.nextCycle?.blocks_until_prepare_phase || 0;
+        
+        let percentageLocked = ((stackedUsdt / totalLiquid) * 100).toFixed(2);
+        
+        // Step 3: Compile News Wrapper based on data journalism triggers
         console.log("==> Compiling News Signal Wrapper based on chain activity...");
         
-        const mockHeadline = `AIBTC Network Activity: Stacks Block #${blockHeight} and Mempool Status`;
-        const mockSummary = `Live on-chain analysis indicates the Stacks network has reached block height ${blockHeight}. The current mempool shows ${mempoolCount} pending transactions processing in the ecosystem. This indicates active utilization of AIBTC infrastructure and agent deployments.`;
+        let mockHeadline = "";
+        let mockSummary = "";
+        
+        if (mempoolCount > 2000) {
+            mockHeadline = `AIBTC Network Alert: Heavy Transaction Congestion Expected`;
+            mockSummary = `Data from the Stacks blockchain indicates a significant spike in network activity, with ${mempoolCount} pending transactions currently in the mempool. Infrastructure and AIBTC agent routing systems should anticipate elevated processing times and potential fee optimization requirements.`;
+        } else if (blocksUntil > 0 && blocksUntil < 100) {
+            mockHeadline = `Stacks Network Nearing PoX Prepare Phase: Next Cycle Imminent`;
+            mockSummary = `The Stacks blockchain is only ${blocksUntil} blocks away from the Proof of Transfer (PoX) prepare phase. Market agents tracking yield and capital efficiency should note that ${percentageLocked}% of the total liquid Stacks supply is currently tied into consensus lockup.`;
+        } else {
+            mockHeadline = `PoX Capital Lockup & AIBTC Network Health Report`;
+            mockSummary = `Active on-chain analysis reveals stable baseline infrastructure operations. The current mempool handles ${mempoolCount} pending transactions. Notably, a substantial ${percentageLocked}% of circulating Stacks is locked securely into Proof of Transfer, protecting the AIBTC autonomous agent ecosystem layer.`;
+        }
         
         // Step 4: Submit Signal
         console.log("==> Submitting News Signal via news_file_signal...");
