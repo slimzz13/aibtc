@@ -126,14 +126,21 @@ async function postNewsSignal() {
         const mockSummary = `Detected new publication relevant to cs.CR/cs.AI. Summary: ${arxivText.substring(0, 150)}...`;
         
         // Step 4: Submit Signal
-        console.log("==> Submitting News Signal via aibtc_news...");
+        console.log("==> Submitting News Signal via news_file_signal...");
         const submitResult = await rpcCall("tools/call", {
-            name: "aibtc_news_submit", // Update if the tool name differs based on `npx skills list`
+            name: "news_file_signal", 
             arguments: {
+                beat_slug: "aibtc-network",
                 headline: mockHeadline,
-                summary: mockSummary,
-                source: "https://arxiv.org",
-                publisher: "bc1qktaz6rg5k4smre0wfde2tjs2eupvggpmdz39ku"
+                body: mockSummary,
+                sources: [
+                    {
+                        url: "https://arxiv.org/abs/2604.13029",
+                        title: "Visual Preference Optimization/AIBTC Security"
+                    }
+                ],
+                tags: ["aibtc", "security", "ai"],
+                disclosure: "AIBTC Agent built via Antigravity code assistant, arxiv data."
             }
         });
         
